@@ -6,7 +6,13 @@
       <el-container>
         <el-aside>
           <el-scrollbar>
-            <div class="user" v-for="user in users" :key="user.userID">
+            <div
+              class="user"
+              :class="{ alert: curUser.isRequest }"
+              v-for="user in users"
+              :key="user.userID"
+              @click="handleAcceptUserReq(user)"
+            >
               <div class="user-name">{{ user.username }}</div>
               <div class="status">
                 <status-icon :connected="user.connected" />
@@ -14,7 +20,7 @@
             </div>
           </el-scrollbar>
         </el-aside>
-        <el-container>
+        <el-container v-if="curUser.isAccepted">
           <el-header>
             <div class="currentUser">
               <div class="curUsername">Lee</div>
@@ -66,6 +72,9 @@
             </div>
           </el-footer>
         </el-container>
+        <div v-else style="width: 100%">
+          <el-empty style="margin:0 auto" description="No user connect"></el-empty>
+        </div>
       </el-container>
     </div>
   </div>
@@ -80,8 +89,22 @@ export default Vue.extend({
   components: { StatusIcon },
   data() {
     return {
-      users: [],
+      users: [{ userID: 1, username: 'Leee' }],
+      curUser: {
+        username: '',
+        isRequest: false,
+        isAccepted: false,
+      },
     };
+  },
+  methods: {
+    handleAcceptUserReq(user) {
+      if (this.curUser.username.length > 0) {
+        socket.emit('acceptUser', { userID: user.userID, adminName: 'Tai' });
+        this.curUser.isRequest = false;
+        this.curUser.isAccepted = true;
+      }
+    },
   },
   created() {
     socket.auth = {
@@ -91,9 +114,9 @@ export default Vue.extend({
   },
   // After completely render
   mounted() {
+    socket.on('sayHi', username => console.log(username));
     socket.on('connect', () => {
       this.users.forEach(user => {
-        console.log(user);
         if (user.self) {
           user.connected = true;
         }
@@ -109,7 +132,6 @@ export default Vue.extend({
     });
 
     const initReactiveProperties = user => {
-      console.log('init');
       user.connected = true;
     };
 
@@ -141,6 +163,14 @@ export default Vue.extend({
         }
       }
     });
+    socket.on('request', username => {
+      this.curUser = {
+        username,
+        isRequest: true,
+      };
+      console.log(username);
+      console.log('abc');
+    });
   },
   destroyed() {
     socket.off('connect');
@@ -148,6 +178,7 @@ export default Vue.extend({
     socket.off('users');
     socket.off('user connected');
     socket.off('user disconnected');
+    socket.off('requestChat');
     // socket.off('private message');
   },
 });
@@ -207,6 +238,19 @@ export default Vue.extend({
   align-items: center;
   justify-content: space-between;
   padding: 0 10px;
+}
+
+.user.alert {
+  animation: alert 1s ease-in-out infinite;
+}
+
+@keyframes alert {
+  from {
+    background: #fff;
+  }
+  to {
+    background: rgb(247, 94, 94);
+  }
 }
 
 .user:hover {

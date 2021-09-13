@@ -34,6 +34,7 @@ io.on('connection', socket => {
       users.push({
         userID: id,
         username: socket.username,
+        chatArr: [],
       });
     }
   }
@@ -47,6 +48,23 @@ io.on('connection', socket => {
     });
   }
 
+  socket.on('chatRequest', ({ username }) => {
+    // console.log(`Chat Request: ${username}`);
+    // socket.broadcast.emit('request', username);
+    socket.broadcast.emit('request', username);
+  });
+
+  socket.on('acceptUser', ({ userID, adminName }) => {
+    socket.to(userID).emit('adminResponse', adminName);
+  });
+
+  socket.on('chat', ({ message }) => {
+    const curUser = users.find(user => user.userID === socket.id);
+    curUser.chatArr.push({ message, isUser: true });
+    console.log(curUser);
+  });
+
+  // socket.on('connectChat', idClient => {});
   // // forward the private message to the right recipient
   // socket.on('private message', ({ content, to }) => {
   //   socket.to(to).emit('private message', {

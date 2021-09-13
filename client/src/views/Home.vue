@@ -4,9 +4,9 @@
       <el-row :gutter="10">
         <el-col :span="8" class="login-form">
           <h1 style="text-align:center ; text-transform:uppercase">Welcome to my page</h1>
-          <el-form>
+          <el-form @submit.prevent.native="Login">
             <el-form-item label="Username">
-              <el-input v-model="search" placeholder="Input username..."></el-input>
+              <el-input v-model="username" placeholder="Input username..."></el-input>
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="Login">Login</el-button>
@@ -15,7 +15,7 @@
         </el-col>
       </el-row>
     </div>
-    <chat v-else />
+    <chat v-else :username="username" />
   </div>
 </template>
 
@@ -28,15 +28,14 @@ export default Vue.extend({
   components: { Chat },
   data() {
     return {
-      search: '',
       isUser: false,
+      username: '',
     };
   },
   methods: {
     Login() {
       this.isUser = true;
-      const username = this.search;
-      socket.auth = { username, admin: false };
+      socket.auth = { username: this.username, admin: false };
       socket.connect();
     },
   },
