@@ -1,25 +1,31 @@
 <template>
 	<div class="about">
-		<h1>Welcome to ChatPage</h1>
-		<!-- <div class="container" v-for="user in users" :key="user.userID">
+		<h1>User Manager</h1>
+		<div class="container" v-for="user in users" :key="user.userID">
 			<div class="status"><status-icon :connected="user.connected" />{{ user.username }}</div>
-		</div> -->
+		</div>
 	</div>
 </template>
 
 <script>
 	import Vue from 'vue';
-	// import StatusIcon from './StatusIcon.vue';
+	import StatusIcon from './StatusIcon.vue';
 	import socket from '../socket/socket';
 	export default Vue.extend({
 		name: 'Chat',
-		components: {},
+		components: { StatusIcon },
 		data() {
 			return {
 				users: [],
 			};
 		},
 		created() {
+			socket.auth = {
+				admin: true,
+			};
+			socket.connect();
+		},
+		mounted() {
 			socket.on('connect', () => {
 				this.users.forEach((user) => {
 					console.log(user);
@@ -38,6 +44,7 @@
 			});
 
 			const initReactiveProperties = (user) => {
+				console.log('init');
 				user.connected = true;
 			};
 
@@ -69,22 +76,6 @@
 					}
 				}
 			});
-
-			// socket.on('private message', ({ content, from }) => {
-			//   for (let i = 0; i < this.users.length; i++) {
-			//     const user = this.users[i];
-			//     if (user.userID === from) {
-			//       user.messages.push({
-			//         content,
-			//         fromSelf: false,
-			//       });
-			//       if (user !== this.selectedUser) {
-			//         user.hasNewMessages = true;
-			//       }
-			//       break;
-			//     }
-			//   }
-			// });
 		},
 		destroyed() {
 			socket.off('connect');
