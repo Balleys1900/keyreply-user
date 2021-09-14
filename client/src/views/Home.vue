@@ -35,11 +35,11 @@ export default Vue.extend({
   methods: {
     Login() {
       this.isUser = true;
-      socket.auth = { username: this.username, admin: false };
-      socket.connect();
+      socket.emit('login', { username: this.username });
     },
   },
   created() {
+    socket.connect();
     socket.on('connect_error', err => {
       if (err.message === 'invalid username') {
         this.usernameAlreadySelected = false;

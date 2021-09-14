@@ -17,6 +17,7 @@
           </div>
         </el-scrollbar>
         <div class="chat-controls">
+          <span class="admin-chat" v-if="adminTyping">Admin is typing...</span>
           <el-form @submit.prevent.native="handleChat">
             <el-form-item>
               <el-input v-model="msg" placeholder="Enter your message....">
@@ -45,6 +46,7 @@ export default Vue.extend({
       isChat: false,
       msg: '',
       chatArr: [],
+      adminTyping: false,
     };
   },
   methods: {
@@ -68,8 +70,11 @@ export default Vue.extend({
     },
   },
   mounted() {
-    socket.on('adminResponse', adminName => {
-      this.appendMessage(`Tôi tên là ${adminName}. Tôi có thể giúp gì cho bạn!`, false);
+    socket.on('adminResponse', ({ adminName, message }) => {
+      this.appendMessage(message, false);
+    });
+    socket.on('adminTyping', () => {
+      this.adminTyping = true;
     });
   },
   destroyed() {
@@ -94,7 +99,7 @@ export default Vue.extend({
   width: 400px;
   margin: 0 auto;
   padding: 20px;
-  height: 600px;
+  height: 500px;
 
   border: 1px solid #ccc;
   border-radius: 5px;
@@ -102,14 +107,14 @@ export default Vue.extend({
 }
 
 .chat-list.chat-list {
-  height: 95%;
+  height: 90%;
 }
 .el-scrollbar__wrap {
   overflow: auto !important;
 }
 
 .chat-controls {
-  height: 5%;
+  height: 10%;
 }
 
 .chat-block {
@@ -132,5 +137,9 @@ export default Vue.extend({
 .chat-block.user span {
   background: #1890ff;
   text-align: right;
+}
+.admin-chat {
+  display: block;
+  margin-bottom: 10px;
 }
 </style>

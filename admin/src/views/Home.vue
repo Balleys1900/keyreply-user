@@ -8,7 +8,7 @@
           <el-scrollbar>
             <div
               class="user"
-              :class="{ alert: curUser.isRequest }"
+              :class="{ alert: user.isRequest, active: curUser && curUser.userID === user.userID }"
               v-for="user in users"
               :key="user.userID"
               @click="handleAcceptUserReq(user)"
@@ -20,55 +20,36 @@
             </div>
           </el-scrollbar>
         </el-aside>
-        <el-container v-if="curUser.isAccepted">
+        <el-container v-if="Object.keys(curUser).length > 0">
           <el-header>
             <div class="currentUser">
-              <div class="curUsername">Lee</div>
+              <div class="curUsername">{{ curUser.username }}</div>
               <div class="setting">Setting</div>
             </div>
           </el-header>
           <el-main>
             <el-scrollbar height="400px">
               <div class="container-chat">
-                <div class="isAdmin">
-                  <i style="color:#409EFC; font-size:20px" class="el-icon-user-solid"></i>
-                  <div class="message">Message From Admin</div>
-                </div>
-                <div class="isUser">
-                  <i style="font-size:20px" class="el-icon-user-solid"></i>
-                  <div class="message">Message From User</div>
-                </div>
-                <div class="isAdmin">
-                  <i style="color:#409EFC; font-size:20px" class="el-icon-user-solid"></i>
-                  <div class="message">Message From Admin</div>
-                </div>
-                <div class="isUser">
-                  <i style="font-size:20px" class="el-icon-user-solid"></i>
-                  <div class="message">Message from user</div>
-                </div>
-                <div class="isAdmin">
-                  <i style="color:#409EFC; font-size:20px" class="el-icon-user-solid"></i>
-                  <div class="message">Message From Admin</div>
-                </div>
-                <div class="isUser">
-                  <i style="font-size:20px" class="el-icon-user-solid"></i>
-                  <div class="message">Message From User</div>
-                </div>
-                <div class="isAdmin">
-                  <i style="color:#409EFC; font-size:20px" class="el-icon-user-solid"></i>
-                  <div class="message">Message From Admin</div>
-                </div>
-                <div class="isUser">
-                  <i style="font-size:20px" class="el-icon-user-solid"></i>
-                  <div class="message">Message from user</div>
+                <div v-for="(chat, i) in curUserChatArray" :key="i">
+                  <div :class="chat.isUser ? 'isUser' : 'isAdmin'">
+                    <i style="font-size:20px" class="el-icon-user-solid"></i>
+                    <div class="message">{{ chat.message }}</div>
+                  </div>
                 </div>
               </div>
             </el-scrollbar>
           </el-main>
           <el-footer>
             <div class="form-input">
-              <input type="text" name="" id="" class="input-text" />
-              <button class="btn-send">Send</button>
+              <input
+                type="text"
+                name=""
+                id=""
+                class="input-text"
+                v-model="message"
+                @focus="typing"
+              />
+              <button class="btn-send" @click="sendMessage">Send</button>
             </div>
           </el-footer>
         </el-container>
@@ -89,96 +70,79 @@ export default Vue.extend({
   components: { StatusIcon },
   data() {
     return {
-      users: [{ userID: 1, username: 'Leee' }],
-      curUser: {
-        username: '',
-        isRequest: false,
-        isAccepted: false,
-      },
+      users: [],
+      curUser: {},
+      message: '',
     };
   },
+  computed: {
+    curUserChatArray() {
+      const user = this.users.find(user => user.userID === this.curUser.userID);
+      return user.chatArr;
+    },
+  },
   methods: {
-    handleAcceptUserReq(user) {
-      if (this.curUser.username.length > 0) {
-        socket.emit('acceptUser', { userID: user.userID, adminName: 'Tai' });
-        this.curUser.isRequest = false;
-        this.curUser.isAccepted = true;
+    handleAcceptUserReq({ userID }) {
+      if (this.curUser.userID !== userID || this.curUser.isRequest) {
+        const user = this.users.find(user => user.userID === userID);
+        this.curUser = user;
+        if (user.isRequest) {
+          user.isRequest = false;
+          const adminName = 'Tai';
+          socket.emit('acceptUser', {
+            userID: user.userID,
+            adminName,
+            message: `Tôi tên là ${adminName}. Tôi có thể giúp gì cho bạn?`,
+          });
+        }
       }
+    },
+    sendMessage() {
+      const message = this.message;
+      this.curUserChatArray.push({ message, isUser: false });
+      const adminName = 'Tai';
+      socket.emit('acceptUser', {
+        userID: this.curUser.userID,
+        adminName,
+        message,
+      });
+      this.message = '';
+    },
+    typing() {
+      socket.emit('typing', this.curUser.userID);
     },
   },
   created() {
-    socket.auth = {
-      admin: true,
-    };
     socket.connect();
+    socket.on('getAllUsers', users => {
+      this.users = users;
+    });
   },
   // After completely render
   mounted() {
-    socket.on('sayHi', username => console.log(username));
-    socket.on('connect', () => {
-      this.users.forEach(user => {
-        if (user.self) {
-          user.connected = true;
-        }
-      });
-    });
-
-    socket.on('disconnect', () => {
-      this.users.forEach(user => {
-        if (user.self) {
-          user.connected = false;
-        }
-      });
-    });
-
-    const initReactiveProperties = user => {
-      user.connected = true;
-    };
-
-    socket.on('users', users => {
-      users.forEach(user => {
-        user.self = user.userID === socket.id;
-        initReactiveProperties(user);
-      });
-      // put the current user first, and sort by username
-      this.users = users.sort((a, b) => {
-        if (a.self) return -1;
-        if (b.self) return 1;
-        if (a.username < b.username) return -1;
-        return a.username > b.username ? 1 : 0;
-      });
-    });
-
-    socket.on('user connected', user => {
-      initReactiveProperties(user);
-      this.users.push(user);
+    socket.on('user', user => {
+      this.users.unshift(user);
     });
 
     socket.on('user disconnected', id => {
-      for (let i = 0; i < this.users.length; i++) {
-        const user = this.users[i];
-        if (user.userID === id) {
-          user.connected = false;
-          break;
-        }
-      }
+      const user = this.users.find(user => user.userID === id);
+      if (user) user.connected = false;
     });
-    socket.on('request', username => {
-      this.curUser = {
-        username,
-        isRequest: true,
-      };
-      console.log(username);
-      console.log('abc');
+
+    socket.on('request', ({ userID }) => {
+      const user = this.users.find(user => user.userID === userID);
+      if (user) user.isRequest = true;
+    });
+
+    socket.on('getChatUser', ({ message, isUser }) => {
+      this.curUserChatArray.push({ message, isUser });
     });
   },
   destroyed() {
-    socket.off('connect');
-    socket.off('disconnect');
     socket.off('users');
-    socket.off('user connected');
+    socket.off('request');
     socket.off('user disconnected');
-    socket.off('requestChat');
+    socket.off('getChatUser');
     // socket.off('private message');
   },
 });
@@ -244,6 +208,11 @@ export default Vue.extend({
   animation: alert 1s ease-in-out infinite;
 }
 
+.user.active {
+  background: #409eff;
+  color: #fff;
+}
+
 @keyframes alert {
   from {
     background: #fff;
@@ -305,6 +274,9 @@ export default Vue.extend({
   gap: 20px;
   line-height: 30px;
 }
+.isAdmin i {
+  color: #409eff;
+}
 .isAdmin .message {
   background-color: #e4e7ed;
   padding: 15px;
@@ -322,5 +294,6 @@ export default Vue.extend({
   align-items: center;
   gap: 20px;
   line-height: 30px;
+  margin: 10px;
 }
 </style>
