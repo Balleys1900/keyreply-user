@@ -1,95 +1,299 @@
 <template>
-	<div class="about">
-		<h1>User Manager</h1>
-		<div class="container" v-for="user in users" :key="user.userID">
-			<div class="status"><status-icon :connected="user.connected" />{{ user.username }}</div>
-		</div>
-	</div>
+  <div class="about">
+    <h1>User Manager</h1>
+
+    <div>
+      <el-container>
+        <el-aside>
+          <el-scrollbar>
+            <div
+              class="user"
+              :class="{ alert: user.isRequest, active: curUser && curUser.userID === user.userID }"
+              v-for="user in users"
+              :key="user.userID"
+              @click="handleAcceptUserReq(user)"
+            >
+              <div class="user-name">{{ user.username }}</div>
+              <div class="status">
+                <status-icon :connected="user.connected" />
+              </div>
+            </div>
+          </el-scrollbar>
+        </el-aside>
+        <el-container v-if="Object.keys(curUser).length > 0">
+          <el-header>
+            <div class="currentUser">
+              <div class="curUsername">{{ curUser.username }}</div>
+              <div class="setting">Setting</div>
+            </div>
+          </el-header>
+          <el-main>
+            <el-scrollbar height="400px">
+              <div class="container-chat">
+                <div v-for="(chat, i) in curUserChatArray" :key="i">
+                  <div :class="chat.isUser ? 'isUser' : 'isAdmin'">
+                    <i style="font-size:20px" class="el-icon-user-solid"></i>
+                    <div class="message">{{ chat.message }}</div>
+                  </div>
+                </div>
+              </div>
+            </el-scrollbar>
+          </el-main>
+          <el-footer>
+            <div class="form-input">
+              <input
+                type="text"
+                name=""
+                id=""
+                class="input-text"
+                v-model="message"
+                @focus="typing"
+              />
+              <button class="btn-send" @click="sendMessage">Send</button>
+            </div>
+          </el-footer>
+        </el-container>
+        <div v-else style="width: 100%">
+          <el-empty style="margin:0 auto" description="No user connect"></el-empty>
+        </div>
+      </el-container>
+    </div>
+  </div>
 </template>
 
 <script>
-	import Vue from 'vue';
-	import StatusIcon from './StatusIcon.vue';
-	import socket from '../socket/socket';
-	export default Vue.extend({
-		name: 'Chat',
-		components: { StatusIcon },
-		data() {
-			return {
-				users: [],
-			};
-		},
-		created() {
-			socket.auth = {
-				admin: true,
-			};
-			socket.connect();
-		},
-		mounted() {
-			socket.on('connect', () => {
-				this.users.forEach((user) => {
-					console.log(user);
-					if (user.self) {
-						user.connected = true;
-					}
-				});
-			});
+import Vue from 'vue';
+import StatusIcon from './StatusIcon.vue';
+import socket from '../socket/socket';
+export default Vue.extend({
+  name: 'Chat',
+  components: { StatusIcon },
+  data() {
+    return {
+      users: [],
+      curUser: {},
+      message: '',
+    };
+  },
+  computed: {
+    curUserChatArray() {
+      const user = this.users.find(user => user.userID === this.curUser.userID);
+      return user.chatArr;
+    },
+  },
+  methods: {
+    handleAcceptUserReq({ userID }) {
+      if (this.curUser.userID !== userID || this.curUser.isRequest) {
+        const user = this.users.find(user => user.userID === userID);
+        this.curUser = user;
+        if (user.isRequest) {
+          user.isRequest = false;
+          const adminName = 'Tai';
+          socket.emit('acceptUser', {
+            userID: user.userID,
+            adminName,
+            message: `Tôi tên là ${adminName}. Tôi có thể giúp gì cho bạn?`,
+          });
+        }
+      }
+    },
+    sendMessage() {
+      const message = this.message;
+      this.curUserChatArray.push({ message, isUser: false });
+      const adminName = 'Tai';
+      socket.emit('acceptUser', {
+        userID: this.curUser.userID,
+        adminName,
+        message,
+      });
+      this.message = '';
+    },
+    typing() {
+      socket.emit('typing', this.curUser.userID);
+    },
+  },
+  created() {
+    socket.connect();
+    socket.on('getAllUsers', users => {
+      this.users = users;
+    });
+  },
+  // After completely render
+  mounted() {
+    socket.on('user', user => {
+      this.users.unshift(user);
+    });
 
-			socket.on('disconnect', () => {
-				this.users.forEach((user) => {
-					if (user.self) {
-						user.connected = false;
-					}
-				});
-			});
+    socket.on('user disconnected', id => {
+      const user = this.users.find(user => user.userID === id);
+      if (user) user.connected = false;
+    });
 
-			const initReactiveProperties = (user) => {
-				console.log('init');
-				user.connected = true;
-			};
+    socket.on('request', ({ userID }) => {
+      const user = this.users.find(user => user.userID === userID);
+      if (user) user.isRequest = true;
+    });
 
-			socket.on('users', (users) => {
-				users.forEach((user) => {
-					user.self = user.userID === socket.id;
-					initReactiveProperties(user);
-				});
-				// put the current user first, and sort by username
-				this.users = users.sort((a, b) => {
-					if (a.self) return -1;
-					if (b.self) return 1;
-					if (a.username < b.username) return -1;
-					return a.username > b.username ? 1 : 0;
-				});
-			});
-
-			socket.on('user connected', (user) => {
-				initReactiveProperties(user);
-				this.users.push(user);
-			});
-
-			socket.on('user disconnected', (id) => {
-				for (let i = 0; i < this.users.length; i++) {
-					const user = this.users[i];
-					if (user.userID === id) {
-						user.connected = false;
-						break;
-					}
-				}
-			});
-		},
-		destroyed() {
-			socket.off('connect');
-			socket.off('disconnect');
-			socket.off('users');
-			socket.off('user connected');
-			socket.off('user disconnected');
-			// socket.off('private message');
-		},
-	});
+    socket.on('getChatUser', ({ message, isUser }) => {
+      this.curUserChatArray.push({ message, isUser });
+    });
+  },
+  destroyed() {
+    socket.off('users');
+    socket.off('request');
+    socket.off('user disconnected');
+    socket.off('getChatUser');
+    // socket.off('private message');
+  },
+});
 </script>
 
 <style scoped>
-	.about h1 {
-		text-align: center;
-	}
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+.about h1 {
+  text-align: center;
+  margin: 30px 0;
+}
+.about {
+  width: 80%;
+  margin: 0 auto;
+}
+.el-container {
+  width: 100%;
+}
+.el-header {
+  border-radius: 10px;
+  border-bottom: 1px solid #d3dce6;
+  /* border-radius: 10px; */
+}
+
+.el-footer {
+  margin: 0;
+  padding: 0;
+  height: 40px !important;
+}
+.el-aside {
+  padding: 60px 0;
+  line-height: 60px;
+  width: 19% !important;
+  border-radius: 10px;
+  border-right: 1px solid #d3dce6;
+}
+
+.el-main {
+  height: 400px;
+  overflow: hidden;
+  /* padding: 0 20px; */
+}
+
+.el-scrollbar {
+  margin: 20px 0;
+  height: 400px;
+  /* padding: 0 20px; */
+}
+
+.user {
+  width: 95%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+}
+
+.user.alert {
+  animation: alert 1s ease-in-out infinite;
+}
+
+.user.active {
+  background: #409eff;
+  color: #fff;
+}
+
+@keyframes alert {
+  from {
+    background: #fff;
+  }
+  to {
+    background: rgb(247, 94, 94);
+  }
+}
+
+.user:hover {
+  width: 95%;
+  background-color: #d3dce6;
+  cursor: pointer;
+}
+.user .user-name {
+  font-size: 20px;
+}
+
+.currentUser {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+}
+
+.form-input {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+.form-input .input-text {
+  height: 100%;
+  width: 80%;
+  border-radius: 10px;
+  font-size: 20px;
+  padding-left: 15px;
+}
+.input-text:focus-visible {
+  outline: none;
+}
+.form-input .btn-send {
+  height: 100%;
+  width: 20%;
+  border-radius: 20px;
+}
+
+.btn-send:hover {
+  background-color: red;
+}
+.container-chat {
+  width: 94%;
+  margin: 0 auto;
+}
+
+.isAdmin {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  line-height: 30px;
+}
+.isAdmin i {
+  color: #409eff;
+}
+.isAdmin .message {
+  background-color: #e4e7ed;
+  padding: 15px;
+  border-radius: 20px;
+}
+.isUser .message {
+  background-color: #409eff;
+  padding: 15px;
+  border-radius: 20px;
+  color: #fff;
+}
+.isUser {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 20px;
+  line-height: 30px;
+  margin: 10px;
+}
 </style>

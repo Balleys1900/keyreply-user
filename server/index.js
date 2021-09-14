@@ -1,66 +1,79 @@
 const httpServer = require('http').createServer();
 const io = require('socket.io')(httpServer, {
-	cors: {
-		origin: '*',
-	},
+  cors: {
+    origin: '*',
+  },
 });
 
-io.use((socket, next) => {
-	const isAdmin = socket.handshake.auth.admin;
+// io.use((socket, next) => {
+//   socket.isAdmin = socket.handshake.auth.admin;
 
-	socket.isAdmin = isAdmin;
+//   if (isAdmin) {
+//     return next();
+//   }
 
-	if (isAdmin) {
-		return next();
-	}
+//   const username = socket.handshake.auth.username;
 
-	const username = socket.handshake.auth.username;
+//   if (!username) {
+//     return next(new Error('invalid username'));
+//   }
+//   socket.username = username;
+//   next();
+// });
 
-	if (!username) {
-		return next(new Error('invalid username'));
-	}
-	socket.username = username;
-	next();
-});
+// State
+let users = [];
 
-io.on('connection', (socket) => {
-	// fetch existing users
-	const users = [];
+io.on('connection', socket => {
+  // fetch existing users
+  socket.emit('getAllUsers', users);
+  socket.on('login', ({ username }) => {
+    const user = {
+      userID: socket.id,
+      username,
+      isRequest: false,
+      isAccepted: false,
+      connected: true,
+      message: '',
+      chatArr: [],
+    };
+    users.push(user);
+    socket.broadcast.emit('user', user);
+  });
 
-	console.log(socket.isAdmin);
+  socket.on('chatRequest', ({ username }) => {
+    const userObj = users.find(user => user.username === username);
+    socket.broadcast.emit('request', userObj);
+  });
 
-	if (!socket.isAdmin) {
-		for (let [id, socket] of io.of('/').sockets) {
-			if (socket.isAdmin) {
-				users.push({
-					userID: id,
-					username: socket.username,
-				});
-			}
-		}
-	}
+  socket.on('acceptUser', ({ userID, adminName, message }) => {
+    socket.to(userID).emit('adminResponse', { adminName, message });
+  });
 
-	socket.emit('users', users);
-	// notify existing users
-	if (!socket.isAdmin) {
-		socket.broadcast.emit('user connected', {
-			userID: socket.id,
-			username: socket.username,
-		});
-	}
+  socket.on('chat', ({ message }) => {
+    const curUser = users.find(user => user.userID === socket.id);
+    curUser.chatArr.push({ message, isUser: true });
+    socket.broadcast.emit('getChatUser', { message, isUser: true });
+  });
 
-	// // forward the private message to the right recipient
-	// socket.on('private message', ({ content, to }) => {
-	//   socket.to(to).emit('private message', {
-	//     content,
-	//     from: socket.id,
-	//   });
-	// });
+  // socket.on('connectChat', idClient => {});
+  // // forward the private message to the right recipient
+  // socket.on('private message', ({ content, to }) => {
+  //   socket.to(to).emit('private message', {
+  //     content,
+  //     from: socket.id,
+  //   });
+  // });
 
-	// notify users upon disconnection
-	socket.on('disconnect', () => {
-		socket.broadcast.emit('user disconnected', socket.id);
-	});
+  // notify users upon disconnection
+  socket.on('typing', ({ userID }) => {
+    socket.to(userID).emit('adminTyping');
+  });
+
+  socket.on('disconnect', () => {
+    users = users.filter(user => user.userID !== socket.id);
+    socket.broadcast.emit('user disconnected', socket.id);
+  });
 });
 
 const PORT = process.env.PORT || 3000;
